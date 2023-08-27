@@ -180,13 +180,7 @@ impl State {
         }
 
         // draw
-        self.player.render(ctx);
-        self.obstacle.render(ctx, self.player.x);
-        if !self.powerups.is_empty(){
-            for item in &self.powerups {
-                item.render(ctx, self.player.x);
-            }
-        }
+        self.render_all(ctx);
 
         // events
         // if an obstacle is succesfully passed
@@ -222,6 +216,16 @@ impl State {
         let create_powerup = random.range(0,10) == 0;
         if create_powerup {self.powerups.push(Powerup::new(self.player.x + SCREEN_WIDTH));}
         
+    }
+
+    fn render_all(&self, ctx: &mut BTerm) {
+        self.player.render(ctx);
+        self.obstacle.render(ctx, self.player.x);
+        if !self.powerups.is_empty(){
+            for item in &self.powerups {
+                item.render(ctx, self.player.x);
+            }
+        }
     }
 
     fn main_menu(&mut self, ctx: &mut BTerm) {
