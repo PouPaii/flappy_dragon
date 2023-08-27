@@ -163,7 +163,6 @@ impl State {
     }
 
     fn play(&mut self, ctx: &mut BTerm) {
-        // #![feature(extract_if)]
         ctx.cls_bg(NAVY);
         // general
         ctx.print(0, 0, "Press SPACE to flap!");
@@ -184,16 +183,28 @@ impl State {
 
         // events
         // if an obstacle is succesfully passed
-        if self.player.x > self.obstacle.x {
-            self.score += 1;
-            self.obstacle = Obstacle::new(self.player.x + SCREEN_WIDTH, self.score);
-        }
-        // if player falls off screen or hits an obstacle
-        if self.player.y > SCREEN_HEIGHT || self.obstacle.hit_obstacle(&self.player){
-            self.mode = GameMode::End;
-        }
+        self.pass_obstacle();
+
+        // game over
+        self.end_game(ctx);
+
         // if powerup is activated
+        self.activate_powerup();
+        
+        // clear out of scope powerups
+        self.powerups.retain(|current| current.x > self.player.x - PLAYER_OFFSET);
+
+        // create new powerups
+        let mut random = RandomNumberGenerator::new();
+        let create_powerup = random.range(0,10) == 0;
+        if create_powerup {self.powerups.push(Powerup::new(self.player.x + SCREEN_WIDTH));}
+        
+    }
+
+    fn activate_powerup(&mut self) {
+        // #![feature(extract_if)]
         // let current_powerup = self.extract_if(|item| item.activate(&self.player)).collect::<Vec<Powerup>>();
+        
         if !self.powerups.is_empty(){
             let mut index: Option<usize> = None;
             for (i, item) in self.powerups.iter().enumerate() {
@@ -208,14 +219,27 @@ impl State {
             if let Some(value) = index {self.powerups.remove(value);
             } else {}
         }
-        // clear out of scope powerups
-        self.powerups.retain(|current| current.x > self.player.x - PLAYER_OFFSET);
+    }
 
-        // create new powerups
-        let mut random = RandomNumberGenerator::new();
-        let create_powerup = random.range(0,10) == 0;
-        if create_powerup {self.powerups.push(Powerup::new(self.player.x + SCREEN_WIDTH));}
-        
+    fn pass_obstacle(&mut self) {
+        if self.player.x > self.obstacle.x {
+            self.score += 1;
+            self.obstacle = Obstacle::new(self.player.x + SCREEN_WIDTH, self.score);
+        }
+    }
+
+    fn end_game(&mut self, ctx: &BTerm) {
+        let off_screen = self.player.y > SCREEN_HEIGHT;
+        let hit_obstacle = self.obstacle.hit_obstacle(&self.player);
+        let mut press_escape = false;
+
+        if let Some(VirtualKeyCode::Escape) = ctx.key {
+            press_escape = true;
+        }
+
+        if  off_screen || hit_obstacle || press_escape{
+            self.mode = GameMode::End;
+        }
     }
 
     fn render_all(&self, ctx: &mut BTerm) {
