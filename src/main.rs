@@ -6,12 +6,13 @@ enum GameMode {
     End,
 }
 
-// enum PowerType {
-//     Coin,
-//     Slow,
-//     Gap,
-//     Gravity,
-// }
+#[derive(Debug)]
+enum PowerType {
+    Coin {value:i32},
+    Slow,
+    Gap,
+    Gravity,
+}
 
 const SCREEN_WIDTH: i32 = 80;
 const SCREEN_HEIGHT: i32 = 50;
@@ -28,8 +29,8 @@ impl Player {
         Self { x, y, velocity: 0.0, }
     }
 
-    fn render(&mut self, ctx: &mut BTerm) {
-        ctx.set( PLAYER_OFFSET, self.y, YELLOW, BLACK, to_cp437('@'));
+    fn render(&self, ctx: &mut BTerm) {
+        ctx.set( PLAYER_OFFSET, self.y, GREEN, BLACK, to_cp437('@'));
     }
 
     fn gravity_and_movement(&mut self) {
@@ -64,29 +65,17 @@ impl Obstacle {
         }
     }
 
-    fn render(&mut self, ctx: &mut BTerm, player_x : i32) {
+    fn render(&self, ctx: &mut BTerm, player_x : i32) {
         let screen_x = self.x - player_x + PLAYER_OFFSET;
         let half_size = self.size / 2;
 
         // Draw the top half of the obstacle
         for y in 0..self.gap_y - half_size {
-            ctx.set(
-                screen_x,
-                y,
-                RED,
-                BLACK,
-                to_cp437('|'),
-            );
+            ctx.set(screen_x, y, RED, BLACK, to_cp437('|'),);
         }
         // Draw the bottom half of the obstacle
         for y in self.gap_y + half_size .. SCREEN_HEIGHT {
-            ctx.set(
-                screen_x,
-                y,
-                RED,
-                BLACK,
-                to_cp437('|'),
-            );
+            ctx.set(screen_x, y, RED, BLACK, to_cp437('|'),);
         }
     }
 
@@ -99,28 +88,44 @@ impl Obstacle {
     }
 }
 
-// struct Powerup {
-//     x: i32,
-//     y: i32,
-//     power: PowerType,
-// }
-// impl Powerup {
-//     fn new(x:i32) -> Self {
-//         let mut random: RandomNumberGenerator = RandomNumberGenerator::new();
-//         Self { x, 
-//             y: random.range(50, 50), 
-//             power: {let power_selector = random.range(0,3);
-//                 match power_selector {
-//                     0 => PowerType::Coin,
-//                     1 => PowerType::Slow,
-//                     2 => PowerType::Gap,
-//                     _ => PowerType::Gravity,
-//                 } 
+#[derive(Debug)]
+struct Powerup {
+    x: i32,
+    y: i32,
+    power: PowerType,
+}
+impl Powerup {
+    fn new(x:i32) -> Self {
+        let mut random: RandomNumberGenerator = RandomNumberGenerator::new();
+        Self { x, 
+            y: random.range(10, 60), 
+            power: {let power_selector = random.range(0,4);
+                match power_selector {
+                    0 => PowerType::Coin{value: random.range(2,7)},
+                    1 => PowerType::Slow,
+                    2 => PowerType::Gap,
+                    _ => PowerType::Gravity,
+                } 
                 
-//             }
-//         }
-//     }
-// }
+            }
+        }
+    }
+
+    fn render(&self, ctx: &mut BTerm, player_x: i32) {
+        let screen_x = self.x - player_x + PLAYER_OFFSET;
+        match self.power {
+            PowerType::Coin{value} => {
+                    ctx.set(screen_x, self.y, YELLOW, BLACK, to_cp437( 
+                        match char::from_digit(value as u32, 10) {
+                            Some(c) => c,
+                        _ => '#'}),);
+                },
+            PowerType::Gravity => {ctx.set(screen_x, self.y, YELLOW, BLACK, to_cp437('*'))},
+            PowerType::Gap => {ctx.set(screen_x, self.y, YELLOW, BLACK, 23 as u16)},
+            _ => {ctx.set(screen_x, self.y, YELLOW, BLACK, to_cp437('>'))} //TODO implement other power ups
+        }
+    }
+}
 
 struct State {
     player: Player,
@@ -128,6 +133,7 @@ struct State {
     mode: GameMode,
     obstacle: Obstacle,
     score: i32,
+    powerups: Vec<Powerup>,
 }
 impl State {
     fn new() -> Self {
@@ -137,6 +143,7 @@ impl State {
             mode: GameMode::Menu,
             obstacle: Obstacle::new(SCREEN_WIDTH, 0),
             score: 0,
+            powerups: Vec::new(),
         }
     }
 
@@ -150,28 +157,44 @@ impl State {
 
     fn play(&mut self, ctx: &mut BTerm) {
         ctx.cls_bg(NAVY);
+        // general
+        ctx.print(0, 0, "Press SPACE to flap!");
+        ctx.print(0, 1, &format!("Score: {}", self.score));
         self.frame_time += ctx.frame_time_ms;
         if self.frame_time > FRAME_DURATION {
             self.frame_time  = 0.0;
             self.player.gravity_and_movement();
         }
+
+        // input
         if let Some(VirtualKeyCode::Space) = ctx.key {
             self.player.flap();
         }
-        self.player.render(ctx);
-        ctx.print(0, 0, "Press SPACE to flap!");
-        ctx.print(0, 1, &format!("Score: {}", self.score));
-        self.obstacle.render(ctx, self.player.x);
 
+        // draw
+        self.player.render(ctx);
+        self.obstacle.render(ctx, self.player.x);
+        if !self.powerups.is_empty(){
+            for item in &self.powerups {
+                item.render(ctx, self.player.x);
+            }
+        }
+
+        // events
         // if an obstacle is succesfully passed
         if self.player.x > self.obstacle.x {
             self.score += 1;
-            self.obstacle =Obstacle::new(self.player.x + SCREEN_WIDTH, self.score);
+            self.obstacle = Obstacle::new(self.player.x + SCREEN_WIDTH, self.score);
         }
         // if player falls off screen or hits an obstacle
         if self.player.y > SCREEN_HEIGHT || self.obstacle.hit_obstacle(&self.player){
             self.mode = GameMode::End;
         }
+        // create powerup
+        let mut random = RandomNumberGenerator::new();
+        let create_powerup = random.range(0,10) == 0;
+        if create_powerup {self.powerups.push(Powerup::new(self.player.x + SCREEN_WIDTH));}
+        
     }
 
     fn main_menu(&mut self, ctx: &mut BTerm) {
