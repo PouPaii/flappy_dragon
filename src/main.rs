@@ -17,7 +17,7 @@ enum PowerType {
 const SCREEN_WIDTH: i32 = 80;
 const SCREEN_HEIGHT: i32 = 50;
 const FRAME_DURATION: f32 = 75.0;
-const PLAYER_OFFSET: i32 = 3;
+const PLAYER_OFFSET: i32 = 10;
 
 struct Player {
     x: i32,
@@ -125,6 +125,13 @@ impl Powerup {
             _ => {ctx.set(screen_x, self.y, YELLOW, BLACK, to_cp437('>'))} //TODO implement other power ups
         }
     }
+
+    fn activate(&self, player: &Player) -> bool {
+        let x_does_match = player.x == self.x;
+        let y_does_match = player.y <= self.y+2 && player.y >= self.y-2;
+
+        x_does_match && y_does_match
+    }
 }
 
 struct State {
@@ -156,6 +163,7 @@ impl State {
     }
 
     fn play(&mut self, ctx: &mut BTerm) {
+        // #![feature(extract_if)]
         ctx.cls_bg(NAVY);
         // general
         ctx.print(0, 0, "Press SPACE to flap!");
@@ -190,7 +198,26 @@ impl State {
         if self.player.y > SCREEN_HEIGHT || self.obstacle.hit_obstacle(&self.player){
             self.mode = GameMode::End;
         }
-        // create powerup
+        // if powerup is activated
+        // let current_powerup = self.extract_if(|item| item.activate(&self.player)).collect::<Vec<Powerup>>();
+        if !self.powerups.is_empty(){
+            let mut index: Option<usize> = None;
+            for (i, item) in self.powerups.iter().enumerate() {
+                if item.activate(&self.player) {
+                    match item.power {
+                        PowerType::Coin { value } => {self.score = self.score + value;println!("HIT")},
+                        _ => {}
+                    }
+                    index = Some(i);
+                }
+            }
+            if let Some(value) = index {self.powerups.remove(value);
+            } else {}
+        }
+        // clear out of scope powerups
+        self.powerups.retain(|current| current.x > self.player.x - PLAYER_OFFSET);
+
+        // create new powerups
         let mut random = RandomNumberGenerator::new();
         let create_powerup = random.range(0,10) == 0;
         if create_powerup {self.powerups.push(Powerup::new(self.player.x + SCREEN_WIDTH));}
