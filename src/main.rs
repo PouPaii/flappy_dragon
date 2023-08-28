@@ -23,10 +23,11 @@ struct Player {
     x: i32,
     y: i32,
     velocity: f32,
+    gravity_sign: isize,
 }
 impl Player {
     fn new(x:i32, y:i32) -> Self {
-        Self { x, y, velocity: 0.0, }
+        Self { x, y, velocity: 0.0, gravity_sign:1}
     }
 
     fn render(&self, ctx: &mut BTerm) {
@@ -34,11 +35,11 @@ impl Player {
     }
 
     fn gravity_and_movement(&mut self) {
-        if self.velocity < 2.0 {
+        if self.velocity.abs() < 2.1 {
             self.velocity += 0.2;
         }
 
-        self.y += self.velocity as i32;
+        self.y += self.velocity as i32 * self.gravity_sign as i32;
         self.x += 1;
         if self.y < 0 {
             self.y = 0;
@@ -211,6 +212,7 @@ impl State {
                 if item.activate(&self.player) {
                     match item.power {
                         PowerType::Coin { value } => {self.score = self.score + value;println!("HIT")},
+                        PowerType::Gravity => {self.player.gravity_sign = -self.player.gravity_sign;},
                         _ => {}
                     }
                     index = Some(i);
